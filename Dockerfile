@@ -1,5 +1,4 @@
 FROM openjdk:8-jre
-MAINTAINER Semantive "https://github.com/semantive"
 
 ENV DEBIAN_FRONTEND noninteractive
 
@@ -36,7 +35,7 @@ RUN wget -q -O- --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15
  && chown -R hadoop:hadoop $HADOOP_HOME
 
 # SPARK
-ENV SPARK_VERSION 2.1.1
+ENV SPARK_VERSION 2.4.5
 ENV SPARK_PACKAGE spark-${SPARK_VERSION}-bin-hadoop2.7
 ENV SPARK_HOME /home/spark
 ENV SPARK_DIST_CLASSPATH="$HADOOP_HOME/etc/hadoop/*:$HADOOP_HOME/share/hadoop/common/lib/*:$HADOOP_HOME/share/hadoop/common/*:$HADOOP_HOME/share/hadoop/hdfs/*:$HADOOP_HOME/share/hadoop/hdfs/lib/*:$HADOOP_HOME/share/hadoop/hdfs/*:$HADOOP_HOME/share/hadoop/yarn/lib/*:$HADOOP_HOME/share/hadoop/yarn/*:$HADOOP_HOME/share/hadoop/mapreduce/lib/*:$HADOOP_HOME/share/hadoop/mapreduce/*:$HADOOP_HOME/share/hadoop/tools/lib/*"
@@ -45,6 +44,17 @@ RUN wget -q -O- --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15
   "http://mirrors.advancedhosters.com/apache/spark/spark-${SPARK_VERSION}/${SPARK_PACKAGE}.tgz" \
   | tar xz --strip 1 -C $SPARK_HOME/ \
  && chown -R spark:spark $SPARK_HOME
+
+ADD gcs-connector-latest-hadoop2.jar guava-23.0.jar spark-bigquery-with-dependencies_2.11-0.14.0-beta.jar spark-sql-kafka-0-10_2.11-2.4.0.jar kafka-clients-2.2.1.jar avro-1.8.0.jar kafka_2.11-2.3.0.jar $SPARK_HOME/jars/
+
+ADD spark-avro_2.11-2.4.0.jar elasticsearch-spark-20_2.11-6.8.7.jar $SPARK_HOME/jars/ 
+ADD myjson.json /opt/
+ADD core-site.xml $HADOOP_HOME/etc/hadoop
+ADD spark-env.sh $SPARK_HOME/conf/
+ENV GS_PROJECT_ID=serene-radius-275116
+RUN echo "export SPARK_DIST_CLASSPATH=$SPARK_DIST_CLASSPATH" >> $SPARK_HOME/conf/spark-env.sh
+#RUN export $SPARK_DIST_CLASSPATH
+RUN echo "export LD_LIBRARY_PATH=$HADOOP_HOME/lib/native/" >> $SPARK_HOME/conf/spark-env.sh 
 
 USER root
 WORKDIR $SPARK_HOME
