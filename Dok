@@ -1,0 +1,89 @@
+FROM ubuntu:18.04 AS deps
+
+RUN apt-get -y update \
+ && apt-get -y upgrade \
+ && apt-get install -y --no-install-recommends apt-utils \
+ && apt-get install -y  wget \
+ && apt-get install -y curl unzip
+
+ENV HADOOP_VERSION 2.7.3
+ENV HADOOP_HOME /opt/hadoop-$HADOOP_VERSION
+
+user root
+WORKDIR /tmp
+RUN wget -q -O- --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 0 \
+  "http://archive.apache.org/dist/hadoop/common/hadoop-$HADOOP_VERSION/hadoop-$HADOOP_VERSION.tar.gz" \
+  | tar -xz -C /tmp
+
+FROM ubuntu:18.04 AS spk
+user root
+WORKDIR /tmp
+RUN apt-get -y update \
+ && apt-get -y upgrade \
+ && apt-get install -y --no-install-recommends apt-utils \
+ && apt-get install -y  wget 
+
+#RUN wget https://downloads.apache.org/spark/spark-2.4.5/spark-2.4.5-bin-hadoop2.7.tgz \
+#	| tar -xz -C /tmp
+RUN wget https://downloads.apache.org/spark/spark-2.4.5/spark-2.4.5-bin-hadoop2.7.tgz \
+	&& tar xvzf spark-2.4.5-bin-hadoop2.7.tgz 
+
+FROM openjdk:8-jdk-slim AS build
+ARG spark_uid=185
+RUN set -ex && \
+    apt-get update && \
+    ln -s /lib /lib64 && \
+    apt install -y bash tini libc6 libpam-modules libnss3 wget python3 python3-pip && \
+    mkdir -p /opt/spark && \
+    mkdir -p /opt/hadoop && \
+    mkdir -p /opt/spark/work-dir && \
+    touch /opt/spark/RELEASE && \
+    rm /bin/sh && \
+    ln -sv /bin/bash /bin/sh && \
+    ln -sv /usr/bin/tini /sbin/tini && \
+    echo "auth required pam_wheel.so use_uid" >> /etc/pam.d/su && \
+    chgrp root /etc/passwd && chmod ug+rw /etc/passwd && \
+    ln -sv /usr/bin/python3 /usr/bin/python && \
+    ln -sv /usr/bin/pip3 /usr/bin/pip && \
+    rm -rf /var/cache/apt/*
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+  && apt install -yqq krb5-user \
+  && rm -rf /var/cache/apt/*
+
+COPY --from=deps /tmp/hadoop-* /opt/hadoop/
+COPY --from=spk /tmp/spark-2.4.5-bin-hadoop2.7 /opt/spark/
+
+
+WORKDIR /tmp
+RUN cd /tmp \
+  && wget https://oak-tree.tech/documents/59/kubernetes-client-4.6.4.jar \
+  && wget https://oak-tree.tech/documents/58/kubernetes-model-4.6.4.jar \
+  && wget https://oak-tree.tech/documents/57/kubernetes-model-common-4.6.4.jar \
+  && rm -rf /opt/spark/jars/kubernetes-client-* \
+  && rm -rf /opt/spark/jars/kubernetes-model-* \
+  && rm -rf /opt/spark/jars/kubernetes-model-common-* \
+  && mv /tmp/kubernetes-* /opt/spark/jars/
+
+ENV SPARK_HOME /opt/spark
+ENV HADOOP_HOME /opt/hadoop
+
+ENV SPARK_DIST_CLASSPATH="$HADOOP_HOME/etc/hadoop/*:$HADOOP_HOME/share/hadoop/common/lib/*:$HADOOP_HOME/share/hadoop/common/*:$HADOOP_HOME/share/hadoop/hdfs/*:$HADOOP_HOME/share/hadoop/hdfs/lib/*:$HADOOP_HOME/share/hadoop/hdfs/*:$HADOOP_HOME/share/hadoop/yarn/lib/*:$HADOOP_HOME/share/hadoop/yarn/*:$HADOOP_HOME/share/hadoop/mapreduce/lib/*:$HADOOP_HOME/share/hadoop/mapreduce/*:$HADOOP_HOME/share/hadoop/tools/lib/*"
+
+ENV PATH $PATH:${SPARK_HOME}/bin
+
+ADD elasticsearch-spark-20_2.11-6.8.7.jar /opt/spark/jars/
+ADD  myjson.json /opt/
+ENV GS_PROJECT_ID=serene-radius-275116
+ADD guava-23.0.jar spark-bigquery-with-dependencies_2.11-0.14.0-beta.jar spark-sql-kafka-0-10_2.11-2.4.0.jar kafka-clients-2.2.1.jar avro-1.8.0.jar kafka_2.11-2.3.0.jar spark-avro_2.11-2.4.0.jar elasticsearch-spark-20_2.11-6.8.7.jar /opt/spark/jars/
+RUN echo "export LD_LIBRARY_PATH=/opt/hadoop/lib/native/" >> /opt/spark/conf/spark-env.sh
+RUN export $LD_LIBRARY_PATH
+ADD core-site.xml /opt/hadoop/etc/hadoop/
+ADD gcs-connector-latest-hadoop2.jar /opt/spark/jars/
+WORKDIR /opt/spark/work-dir
+RUN chmod g+w /opt/spark/work-dir
+RUN chmod +x /opt/spark/sbin/
+ENTRYPOINT [ "/opt/spark/kubernetes/dockerfiles/spark/entrypoint.sh" ]
+USER ${spark_uid}
+
