@@ -75,15 +75,17 @@ ENV PATH $PATH:${SPARK_HOME}/bin
 
 ADD elasticsearch-spark-20_2.11-6.8.7.jar /opt/spark/jars/
 ADD  myjson.json /opt/
-ENV GS_PROJECT_ID=serene-radius-275116
-ADD guava-23.0.jar spark-bigquery-with-dependencies_2.11-0.14.0-beta.jar spark-sql-kafka-0-10_2.11-2.4.0.jar kafka-clients-2.2.1.jar avro-1.8.0.jar kafka_2.11-2.3.0.jar spark-avro_2.11-2.4.0.jar elasticsearch-spark-20_2.11-6.8.7.jar /opt/spark/jars/
+ADD entrypoint.sh /opt/
+ENV GS_PROJECT_ID=coastal-mercury-275507
+ADD google-cloud-storage-1.100.0.jar guava-23.0.jar spark-bigquery-with-dependencies_2.11-0.14.0-beta.jar spark-sql-kafka-0-10_2.11-2.4.0.jar kafka-clients-2.2.1.jar avro-1.8.0.jar kafka_2.11-2.3.0.jar spark-avro_2.11-2.4.0.jar elasticsearch-spark-20_2.11-6.8.7.jar /opt/spark/jars/
 RUN echo "export LD_LIBRARY_PATH=/opt/hadoop/lib/native/" >> /opt/spark/conf/spark-env.sh
 RUN export $LD_LIBRARY_PATH
 ADD core-site.xml /opt/hadoop/etc/hadoop/
 ADD gcs-connector-latest-hadoop2.jar /opt/spark/jars/
+ADD mygcp-1.0-SNAPSHOT.jar /opt/spark/examples/jars/
 WORKDIR /opt/spark/work-dir
 RUN chmod g+w /opt/spark/work-dir
 RUN chmod +x /opt/spark/sbin/
-ENTRYPOINT [ "/opt/spark/kubernetes/dockerfiles/spark/entrypoint.sh" ]
+ENTRYPOINT [ "/opt/entrypoint.sh" ]
 USER ${spark_uid}
 
